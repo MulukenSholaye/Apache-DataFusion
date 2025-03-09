@@ -809,8 +809,54 @@ impl DisplayAs for AggregateExec {
                 }
             }
             DisplayFormatType::TreeRender => {
-                // TODO: collect info
-                write!(f, "")?;
+                let g: Vec<String> = if self.group_by.is_single() {
+                    self.group_by
+                        .expr
+                        .iter()
+                        .map(|(e, _)| {
+                            let e = e.to_string();
+                            e.rfind('@').map(|pos| &e[pos..]).unwrap_or("").parse().unwrap()
+                        })
+                        .collect()
+                } else {
+                    self.group_by
+                        .groups
+                        .iter()
+                        .map(|group| {
+                            let terms = group
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, is_null)| {
+                                    if *is_null {
+                                        let (e, _) = &self.group_by.null_expr[idx];
+                                        let e = e.to_string();
+                                        e.rfind('@').map(|pos| &e[pos..]).unwrap_or("").parse().unwrap()
+                                    } else {
+                                        let (e, _) = &self.group_by.expr[idx];
+                                        let e = e.to_string();
+                                        e.rfind('@').map(|pos| &e[pos..]).unwrap_or("").parse().unwrap()
+                                    }
+                                })
+                                .collect::<Vec<String>>()
+                                .join(", ");
+                            format!("({terms})")
+                        })
+                        .collect()
+                };
+                let a: Vec<String> = self
+                    .aggr_expr
+                    .iter()
+                    .map(|agg| agg.name().to_string())
+                    .collect();
+                writeln!(f, "mode={:?}", self.mode)?;
+                writeln!(f, "group_by={}", g.join(" "))?;
+                for (i, aggr) in a.iter().enumerate(){
+                    if a.len() == 1 {
+                        writeln!(f, "aggr={aggr}")?
+                    } else {
+                        writeln!(f, "aggr{i}={aggr}")?
+                    }
+                }
             }
         }
         Ok(())
